@@ -1,34 +1,85 @@
+"""
+Extract raster data from an H5 file and save as a GeoTiff. The raster profile must be saved as an
+attribute on the layer.
+"""
+import sys
 import h5py
 import json
-import pandas as pd
+import click
 import rasterio as rio
 
-profile = {
-    'crs': 'PROJCS["unknown",GEOGCS["NAD83",DATUM["North American Datum 1983",SPHEROID["GRS 1980",6378137,298.257222101004]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]]],PROJECTION["Albers_Conic_Equal_Area"],PARAMETER["latitude_of_center",40],PARAMETER["longitude_of_center",-96],PARAMETER["standard_parallel_1",20],PARAMETER["standard_parallel_2",60],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH]]',
-    'transform': [90.0, 0.0, -2641009.648820926, 0.0, -90.0, 1383261.013006147],
-    'height': 35780,
-    'width': 56332,
-    'count': 1,
-    'compress': 'lzw',
-}
-# h5_file = './20231110_wowts_costs.h5'
-h5_file = '/shared-projects/rev/exclusions/xmission_costs.h5'
-layer = 'tie_line_costs_102MW'
-
-with h5py.File(h5_file, "r") as ds:
-    data = ds[layer][0, :, :]
-    profile = json.loads(ds[layer].attrs['profile'])
+from typing import List
 
 
-breakpoint()
-print(data.shape, data.min(), data.max())
+def get_dataset_name(f: h5py.File) -> str:
+    """
+    Display layer selection list to user and return selected layer name
+    """
+    layers = f.keys()
+    if len(layers) == 0:
+        click.echo(f'No layers found in file')
+        sys.exit(1)
 
-if 'dtype' not in profile:
-    profile['dtype'] = data.dtype
+    click.echo('Available datasets:')
+    layer_map: List[str] = []
+    for i, layer_name in enumerate(layers):
+        layer_map.append(layer_name)
+        layer = f[layer_name]
+        shape = layer.shape
+        attrs = layer.attrs
+        descr = attrs['description'] if 'description' in attrs else ''
+        dtype = layer.dtype
+        click.echo(f'\t{i}) {layer_name} \t{shape} \t{dtype} \t{descr}')
 
-assert profile['dtype'] == data.dtype
-assert profile['height'] == data.shape[0]
-assert profile['width'] == data.shape[1]
+    selection: int = click.prompt('Select layer by number', type=click.IntRange(0, len(layers)-1))
+    layer_name = layer_map[selection]
+    return layer_name
 
-with rio.open(f'{layer}.tif', 'w', **profile) as outf:
-    outf.write(data, indexes=1)
+
+@click.command()
+@click.argument('h5_file', type=click.Path(exists=True),)
+def main(h5_file: str):
+    """
+    Convert a dataset in an H5 file to a GeoTiff.
+
+    H5_FILE is the H5 file to extract data from.
+    """
+    with h5py.File(h5_file, "r") as f:
+        layer_name = get_dataset_name(f)
+        layer = f[layer_name]
+
+        if 'profile' not in layer.attrs:
+            click.echo(f'Layer {layer_name} doesn\'t have a profile attribute. Aborting')
+            sys.exit(1)
+        profile = json.loads(layer.attrs['profile'])
+
+        print(f'Loading layer {layer_name} from {h5_file}...')
+        if len(layer.shape) == 3:
+            data = layer[0, :, :]
+        elif len(layer.shape) == 2:
+            data = layer[:, :]
+        else:
+            click.echo(f'Layer must have 2 or 3 dimensions to convert. {layer_name} has '
+                       f'{len(layer.shape)}')
+            sys.exit(1)
+
+    click.echo(f'Loaded. Shape: {data.shape}, min: {data.min()}, max: '
+               f'{data.max()}, dtype: {data.dtype}')
+
+    if 'dtype' not in profile:
+        profile['dtype'] = data.dtype
+    if 'compress' not in profile:
+        profile['compress'] = 'lzw'
+
+    assert profile['dtype'] == data.dtype
+    assert profile['height'] == data.shape[0]
+    assert profile['width'] == data.shape[1]
+
+    tiff_name = f'{layer_name}.tif'
+    click.echo(f'Writing data to {tiff_name}')
+    with rio.open(tiff_name, 'w', **profile) as outf:
+        outf.write(data, indexes=1)
+
+
+if __name__ == '__main__':
+    main()
