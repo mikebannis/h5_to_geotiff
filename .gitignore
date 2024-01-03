@@ -2,3 +2,6 @@
 *.tiff
 *.swp
 .nfs*
+*.egg-info/
+*.pyc
+__pycache__/
