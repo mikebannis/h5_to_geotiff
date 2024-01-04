@@ -2,13 +2,19 @@
 Extract raster data from an H5 file and save as a GeoTiff. The raster profile must be saved as an
 attribute on the layer.
 """
+import os
 import sys
-import h5py
 import json
+from typing import List
+
+import h5py
 import click
 import rasterio as rio
+from beautifultable import BeautifulTable, ALIGN_LEFT, WEP_WRAP, WEP_ELLIPSIS
 
-from typing import List
+
+def terminal_width() -> int:
+    return os.get_terminal_size().columns
 
 
 def get_dataset_name(f: h5py.File) -> str:
@@ -17,28 +23,51 @@ def get_dataset_name(f: h5py.File) -> str:
     """
     layers = f.keys()
     if len(layers) == 0:
-        click.echo(f'No layers found in file')
+        click.echo('No layers found in file')
         sys.exit(1)
 
-    click.echo('Available datasets:')
+    table = BeautifulTable(maxwidth=terminal_width(), default_alignment=ALIGN_LEFT)
     layer_map: List[str] = []
-    for i, layer_name in enumerate(layers):
+    for layer_name in layers:
         layer_map.append(layer_name)
         layer = f[layer_name]
         shape = layer.shape
         attrs = layer.attrs
         descr = attrs['description'] if 'description' in attrs else ''
         dtype = layer.dtype
-        click.echo(f'\t{i}) {layer_name} \t{shape} \t{dtype} \t{descr}')
+        table.rows.append([layer_name, shape, dtype, descr])
 
-    selection: int = click.prompt('Select layer by number', type=click.IntRange(0, len(layers)-1))
+    table.rows.header = [str(x) for x in range(len(layers))]
+    table.columns.header = ['Name', 'Shape', 'dtype', 'Description']
+    table.set_style(BeautifulTable.STYLE_COMPACT)
+    table.columns.width_exceed_policy = WEP_WRAP
+    click.echo(table)
+
+    selection: int = click.prompt('\nSelect layer by number', type=click.IntRange(0, len(layers)-1))
     layer_name = layer_map[selection]
     return layer_name
 
 
+def print_attributes(layer: h5py.Dataset):
+    """ Print attributes in a layer"""
+    if len(layer.attrs) == 0:
+        click.echo('Layer has no attributes')
+        return
+
+    table = BeautifulTable(maxwidth=terminal_width(), default_alignment=ALIGN_LEFT)
+    for attr, value in layer.attrs.items():
+        table.rows.append([attr, value])
+    table.columns.header = ['Attribute', 'Value']
+    table.set_style(BeautifulTable.STYLE_COMPACT)
+    table.columns.width_exceed_policy = WEP_WRAP
+    click.echo(table)
+
+
 @click.command()
 @click.argument('h5_file', type=click.Path(exists=True),)
-def main(h5_file: str):
+@click.option ('-s', '--show-attributes', is_flag=True, default=False, help="Show layer attributes "
+               'and exit without creating GeoTiff.')
+def main(h5_file: str, show_attributes: bool):
     """
     Convert a dataset in an H5 file to a GeoTiff.
 
@@ -47,6 +76,10 @@ def main(h5_file: str):
     with h5py.File(h5_file, "r") as f:
         layer_name = get_dataset_name(f)
         layer = f[layer_name]
+        if show_attributes:
+            click.echo()
+            print_attributes(layer)
+            sys.exit(0)
 
         if 'profile' not in layer.attrs:
             click.echo(f'Layer {layer_name} doesn\'t have a profile attribute. Aborting')
