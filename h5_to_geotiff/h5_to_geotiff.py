@@ -42,9 +42,10 @@ def get_dataset_name(f: h5py.File, show_description: bool) -> str:
 
 
     table.rows.header = [str(x) for x in range(len(layers))]
-    table.columns.header = ['Name', 'Shape', 'dtype']
     if show_description:
-        table.columns.header.append('Description')
+        table.columns.header = ['Name', 'Shape', 'dtype', 'Description']
+    else:
+        table.columns.header = ['Name', 'Shape', 'dtype']
     table.set_style(BeautifulTable.STYLE_COMPACT)
     table.columns.width_exceed_policy = WEP_WRAP
     click.echo(table)
