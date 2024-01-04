@@ -17,7 +17,7 @@ def terminal_width() -> int:
     return os.get_terminal_size().columns
 
 
-def get_dataset_name(f: h5py.File) -> str:
+def get_dataset_name(f: h5py.File, show_description: bool) -> str:
     """
     Display layer selection list to user and return selected layer name
     """
@@ -35,10 +35,16 @@ def get_dataset_name(f: h5py.File) -> str:
         attrs = layer.attrs
         descr = attrs['description'] if 'description' in attrs else ''
         dtype = layer.dtype
-        table.rows.append([layer_name, shape, dtype, descr])
+        if show_description:
+            table.rows.append([layer_name, shape, dtype, descr])
+        else:
+            table.rows.append([layer_name, shape, dtype])
+
 
     table.rows.header = [str(x) for x in range(len(layers))]
-    table.columns.header = ['Name', 'Shape', 'dtype', 'Description']
+    table.columns.header = ['Name', 'Shape', 'dtype']
+    if show_description:
+        table.columns.header.append('Description')
     table.set_style(BeautifulTable.STYLE_COMPACT)
     table.columns.width_exceed_policy = WEP_WRAP
     click.echo(table)
@@ -67,14 +73,16 @@ def print_attributes(layer: h5py.Dataset):
 @click.argument('h5_file', type=click.Path(exists=True),)
 @click.option ('-s', '--show-attributes', is_flag=True, default=False, help="Show layer attributes "
                'and exit without creating GeoTiff.')
-def main(h5_file: str, show_attributes: bool):
+@click.option ('-n', '--no-description', is_flag=True, default=False, help="Don't show layer "
+               'descriptions in layer list.')
+def main(h5_file: str, show_attributes: bool, no_description: bool):
     """
     Convert a dataset in an H5 file to a GeoTiff.
 
     H5_FILE is the H5 file to extract data from.
     """
     with h5py.File(h5_file, "r") as f:
-        layer_name = get_dataset_name(f)
+        layer_name = get_dataset_name(f, not no_description)
         layer = f[layer_name]
         if show_attributes:
             click.echo()
