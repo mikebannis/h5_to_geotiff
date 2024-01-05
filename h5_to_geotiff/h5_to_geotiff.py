@@ -13,17 +13,12 @@ import rasterio as rio
 from beautifultable import BeautifulTable, ALIGN_LEFT, WEP_WRAP
 
 REV_CONUS_PROFILE = {
-    "driver": "GTiff",
-    "width": 48640,
-    "height": 33792,
-    "count": 1,
     "crs": "+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs=True",
     "transform": [90.0, 0.0, -2245497.1304, 0.0, -90.0, 1338250.676],
-    "blockxsize": 128,
-    "blockysize": 128,
-    "tiled": False,
+    "height": 33792,
+    "width": 48640,
+    "count": 1,
     "compress": "lzw",
-    "interleave": "band"
 }
 
 REV_OFFSHORE_PROFILE = {
@@ -126,9 +121,11 @@ def get_profile(layer: h5py.Dataset, layer_name: str) -> dict:
 @click.argument('h5_file', type=click.Path(exists=True),)
 @click.option ('-a', '--attributes', is_flag=True, default=False, help='Show attributes for '
                'selected layer and exit without creating GeoTiff.')
-@click.option ('-d', '--descriptions', is_flag=True, default=False, help='Show layer '
-               'descriptions in layer list.')
-def main(h5_file: str, attributes: bool, descriptions: bool):
+@click.option ('-d', '--descriptions', is_flag=True, default=False,
+               help='Show layer descriptions in layer list.')
+@click.option ('-c', '--compress', is_flag=True, default=False,
+               help='Force use of LZW compression.')
+def main(h5_file: str, attributes: bool, descriptions: bool, compress: bool):
     """
     Convert a dataset in an H5 file to a GeoTiff.
 
@@ -160,6 +157,8 @@ def main(h5_file: str, attributes: bool, descriptions: bool):
     if 'dtype' not in profile:
         profile['dtype'] = data.dtype
     if 'compress' not in profile:
+        profile['compress'] = 'lzw'
+    if compress:
         profile['compress'] = 'lzw'
 
     assert profile['dtype'] == data.dtype
