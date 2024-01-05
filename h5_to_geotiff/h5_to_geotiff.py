@@ -14,7 +14,6 @@ from beautifultable import BeautifulTable, ALIGN_LEFT, WEP_WRAP
 
 REV_CONUS_PROFILE = {
     "driver": "GTiff",
-    "nodata": 99.0,
     "width": 48640,
     "height": 33792,
     "count": 1,
@@ -26,8 +25,9 @@ REV_CONUS_PROFILE = {
     "compress": "lzw",
     "interleave": "band"
 }
+
 REV_OFFSHORE_PROFILE = {
-    'crs': 'PROJCS["unknown",GEOGCS["NAD83",DATUM["North American Datum 1983",SPHEROID["GRS 1980",6378137,298.257222101004]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]]],PROJECTION["Albers_Conic_Equal_Area"],PARAMETER["latitude_of_center",40],PARAMETER["longitude_of_center",-96],PARAMETER["standard_parallel_1",20],PARAMETER["standard_parallel_2",60],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH]]',
+    "crs": "+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs=True",
     'transform': [90.0, 0.0, -2641009.648820926, 0.0, -90.0, 1383261.013006147],
     'height': 35780,
     'width': 56332,
@@ -39,6 +39,7 @@ PROFILE_MAP = {
     (33792, 48640): REV_CONUS_PROFILE,
     (35780, 56332): REV_OFFSHORE_PROFILE,
 }
+
 
 def terminal_width() -> int:
     return os.get_terminal_size().columns
@@ -67,7 +68,6 @@ def get_dataset_name(f: h5py.File, show_description: bool) -> str:
         else:
             table.rows.append([layer_name, shape, dtype])
 
-
     table.rows.header = [str(x) for x in range(len(layers))]
     if show_description:
         table.columns.header = ['Name', 'Shape', 'dtype', 'Description']
@@ -83,7 +83,7 @@ def get_dataset_name(f: h5py.File, show_description: bool) -> str:
 
 
 def print_attributes(layer: h5py.Dataset):
-    """ Print attributes in a layer"""
+    """ Print attributes for a layer"""
     if len(layer.attrs) == 0:
         click.echo('Layer has no attributes')
         return
@@ -111,7 +111,7 @@ def get_profile(layer: h5py.Dataset, layer_name: str) -> dict:
         click.echo('Layer resolution does not have a known profile. Aborting')
         sys.exit(1)
 
-    if not click.confirm('There is a known profile for the resolution of of this layer. '
+    if not click.confirm('There is a known profile for this layer\'s resolution. '
                          'Should I attempt to use it to make a GeoTiff? Resulting '
                          'georeferencing may not be valid.'):
         click.echo('Bye!')
