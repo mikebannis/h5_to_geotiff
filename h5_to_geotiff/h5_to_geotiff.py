@@ -5,7 +5,7 @@ attribute on the layer.
 import os
 import sys
 import json
-from typing import List
+from typing import List, Tuple
 
 import h5py
 import click
@@ -125,7 +125,10 @@ def get_profile(layer: h5py.Dataset, layer_name: str) -> dict:
                help='Show layer descriptions in layer list.')
 @click.option ('-c', '--compress', is_flag=True, default=False,
                help='Force use of LZW compression.')
-def main(h5_file: str, attributes: bool, descriptions: bool, compress: bool):
+@click.option ('-b', '--block-size', type=(int, int),
+               help='Block size profile override.')
+def main(h5_file: str, attributes: bool, descriptions: bool, compress: bool,
+         block_size: Tuple[int, int]):
     """
     Convert a dataset in an H5 file to a GeoTiff.
 
@@ -141,7 +144,7 @@ def main(h5_file: str, attributes: bool, descriptions: bool, compress: bool):
 
         profile = get_profile(layer, layer_name)
 
-        print(f'Loading layer {layer_name} from {h5_file}...')
+        click.echo(f'Loading layer {layer_name} from {h5_file}...')
         if len(layer.shape) == 3:
             data = layer[0, :, :]
         elif len(layer.shape) == 2:
@@ -161,12 +164,19 @@ def main(h5_file: str, attributes: bool, descriptions: bool, compress: bool):
     if compress:
         profile['compress'] = 'lzw'
 
+    if block_size:
+        click.echo(f'Setting x, y block size to {block_size}')
+        profile['blockxsize'] = block_size[0]
+        profile['blockysize'] = block_size[1]
+
     assert profile['dtype'] == data.dtype
     assert profile['height'] == data.shape[0]
     assert profile['width'] == data.shape[1]
 
     tiff_name = f'{layer_name}.tif'
     click.echo(f'Writing data to {tiff_name}')
+    click.echo(f'Using profile {profile}')
+
     with rio.open(tiff_name, 'w', **profile) as outf:
         outf.write(data, indexes=1)
 
