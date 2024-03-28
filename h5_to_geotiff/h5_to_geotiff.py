@@ -92,16 +92,26 @@ def print_attributes(layer: h5py.Dataset):
     click.echo(table)
 
 
-def get_profile(layer: h5py.Dataset, layer_name: str) -> dict:
+def get_profile(layer: h5py.Dataset, layer_name: str, ignore_profile: bool = False) -> dict:
     """
     Get profile from layer attributes or optionally use known profile based on resolution.
     """
+    shape = layer.shape if len(layer.shape) == 2 else layer.shape[1:]
+
+    if ignore_profile:
+        if shape in PROFILE_MAP:
+            click.echo(f'Using standard profile for raster with shape {shape}')
+            profile = PROFILE_MAP[shape]
+            profile['dtype'] = layer.dtype
+            return profile
+        click.echo(f'No known profiles for shape {shape}')
+        sys.exit(1)
+
     if 'profile' in layer.attrs:
         return  json.loads(layer.attrs['profile'])
 
     click.echo(f'Layer {layer_name} doesn\'t have a profile stored in the attributes.')
 
-    shape = layer.shape if len(layer.shape) == 2 else layer.shape[1:]
     if shape not in PROFILE_MAP:
         click.echo('Layer resolution does not have a known profile. Aborting')
         sys.exit(1)
@@ -127,8 +137,10 @@ def get_profile(layer: h5py.Dataset, layer_name: str) -> dict:
                help='Force use of LZW compression.')
 @click.option ('-b', '--block-size', type=(int, int),
                help='Block size profile override.')
+@click.option('-i', '--ignore-profile', is_flag=True, default=False,
+              help='Ignore any profile in H5 and use a standard profile')
 def main(h5_file: str, attributes: bool, descriptions: bool, compress: bool,
-         block_size: Tuple[int, int]):
+         block_size: Tuple[int, int], ignore_profile: bool):
     """
     Convert a dataset in an H5 file to a GeoTiff.
 
@@ -142,7 +154,7 @@ def main(h5_file: str, attributes: bool, descriptions: bool, compress: bool,
             print_attributes(layer)
             sys.exit(0)
 
-        profile = get_profile(layer, layer_name)
+        profile = get_profile(layer, layer_name, ignore_profile=ignore_profile)
 
         click.echo(f'Loading layer {layer_name} from {h5_file}...')
         if len(layer.shape) == 3:
